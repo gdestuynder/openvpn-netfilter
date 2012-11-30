@@ -21,10 +21,10 @@ RULE FORMAT
 ===========
 Rules are formatted as list of ips or networks (anything netfilter understands for an address or network really), such as:
 
-# Lines starting with a # sign can be used for comments
-127.0.0.1
-127.0.0.1/27
-# Obviously you might want to use slightly more useful rules ;-)
+    # Lines starting with a # sign can be used for comments
+    127.0.0.1
+    127.0.0.1/27
+    # Obviously you might want to use slightly more useful rules ;-)
 
 SCRIPT LOGIC
 ============
@@ -35,18 +35,20 @@ If the script fails for any reason, OpenVPN will deny packets to come through.
 
 Each user access is represented by a new netfilter chain named by it's local VPN ip, such as:
 
-Chain INPUT (policy ACCEPT)
-target     prot opt source               destination         
-10.22.248.10  all  --  10.22.248.10         anywhere 
+    Chain INPUT (policy ACCEPT)
+    target     prot opt source               destination         
+    10.22.248.10  all  --  10.22.248.10         anywhere 
 
 And the equivalent OUTPUT chain.
 
 
 The user chain looks like:
-Chain 10.22.248.10 (2 references)
-target     prot opt source               destination         
-ACCEPT     all  --  10.22.248.10         10.250.64.0/22      /* username:vpn_teamname */ 
-ACCEPT     all  --  10.250.64.0/22       10.22.248.10        /* username:vpn_teamname */ 
+
+    Chain 10.22.248.10 (2 references)
+    target     prot opt source               destination         
+    ACCEPT     all  --  10.22.248.10         10.250.64.0/22      /* username:vpn_teamname */ 
+    ACCEPT     all  --  10.250.64.0/22       10.22.248.10        /* username:vpn_teamname */
+    DROP       all  --  any                  any
 
 
 You'll notice the comments are there for ease of troubleshooting, you can grep through "iptables -L -n" and find out which user or group has access to what easily.
