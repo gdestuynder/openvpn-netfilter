@@ -7,10 +7,14 @@ SETUP
 =====
 
 If using LDAP for user authentication, add this to the OpenVPN server configuration:
-username-as-common-name
+    username-as-common-name
 
 For any OpenVPN server configuration, also add this (or a sudo wrapper to this script, if needed. You may also use capabilities.):
-learn-address /etc/openvpn/netfilter/netfilter.py
+    learn-address /etc/openvpn/netfilter/netfilter.py
+    #This is necessary so that openvpn delete the ip after 20s, assuming the client has gone away
+    #This may not be needed for TCP VPNs since the VPN knows when the client has gone away. (have not tested)
+    #For the same reason, remember to kill a client for at least 20s, or SIGUSR1 openvpn if you're changing ACLs for that client.
+    keepalive 10 20
 
 Change the settings at the top of the netfilter.py file. In general, you'll want to store the settings in /etc/openvpn/netfitler/rules/* and have a list of files such as "vpn_teamA.rules". Users belonging to the LDAP group name teamA will get those rules.
 You'll also want to have /etc/openvpn/netfilter/users/* for per user rules.
