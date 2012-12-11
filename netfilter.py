@@ -151,6 +151,7 @@ def add_chain(address, cn, dev):
 	iptables('-N '+address)
 	iptables('-A OUTPUT -d '+address+' -j '+address)
 	iptables('-A INPUT -s '+address+' -j '+address)
+	iptables('-A FORWARD -s '+address+' -j '+address)
 	load_rules(address, cn, dev)
 	load_per_user_rules(address, cn, dev)
 
@@ -161,6 +162,7 @@ def update_chain(address, cn, dev):
 def del_chain(address, dev):
 	iptables('-D OUTPUT -d '+address+' -j '+address, False)
 	iptables('-D INPUT -s '+address+' -j '+address, False)
+	iptables('-D FORWARD -s '+address+' -j '+address, False)
 	iptables('-F '+address, False)
 	iptables('-X '+address, False)
 
