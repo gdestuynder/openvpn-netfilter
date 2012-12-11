@@ -7,9 +7,11 @@ SETUP
 =====
 
 If using LDAP for user authentication, add this to the OpenVPN server configuration:
+
     username-as-common-name
 
 For any OpenVPN server configuration, also add this (or a sudo wrapper to this script, if needed. You may also use capabilities.):
+
     learn-address /etc/openvpn/netfilter/netfilter.py
     #This is necessary so that openvpn delete the ip after 20s, assuming the client has gone away
     #This may not be needed for TCP VPNs since the VPN knows when the client has gone away. (have not tested)
