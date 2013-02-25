@@ -76,7 +76,7 @@ def log(msg):
 
 def cef(msg1, msg2):
 	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
-	cefmsg = 'CEF:0|Mozilla|OpenVPN|1.0|'+msg1+'|'+msg2+' dhost='+NODENAME
+	cefmsg = 'CEF:0|Mozilla|OpenVPN|1.0||'+msg1+'|5|'+msg2+' dhost='+NODENAME
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
 #	log(cefmsg)
@@ -95,38 +95,67 @@ def parse_rules(fd):
 def load_ldap():
 	conn = ldap.initialize(LDAP_URL)
 	conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PASSWD)
-	res = conn.search_s(LDAP_BASE_DN, ldap.SCOPE_SUBTREE, LDAP_FILTER, ['cn', 'member'])
-#schema = {'vpn_example1': ['noob1@mozilla.com', 'noob2@mozilla.com'], 'vpn_example2': ...}
+	res = conn.search_s(LDAP_BASE_DN, ldap.SCOPE_SUBTREE, LDAP_FILTER, ['cn', 'member', 'ipHostNumber'])
+#schema = {'vpn_example1': {'cn': ['noob1@mozilla.com', 'noob2@mozilla.com'],
+#'networks': ['192.168.0.1/24', '10.0.0.1/16:80 #comment', '10.0.0.1:22']}, 'vpn_example2': ...}
 	schema = {}
 	for grp in res:
 		ulist = []
+		hlist = []
 		group = grp[1]['cn'][0]
+
 		for u in grp[1]['member']:
 			try:
 				ulist.append(u.split('=')[1].split(',')[0])
 			except:
 				log("Failed to load user from LDAP: %s at group %s, skipping" % (u, group))
-		schema[group] = ulist
+		if grp[1].has_key('ipHostNumber'):
+			hlist = grp[1]['ipHostNumber']
+		schema[group] = {'cn': ulist, 'networks': hlist}
 	return schema
 
-def load_group_rule(address, cn, dev, group):
-	rule_file = RULES+"/"+group+'.rules'
-	try:
-		fd = open(rule_file)
-	except:
-		log("Failed to open rule file %s" % rule_file)
-		sys.exit(1)
+def load_group_rule(address, cn, dev, group, networks):
+	#Some of the parsing is hackish (accomodating the ever-changing hack to have attributes inside an attribute in LDAP)
+	#this probably needs some refactoring when we're happy with the rule format
+	if len(networks) != 0:
+		for net in networks:
+			#the attribute stored in net (ipHostNumber) includes 2 values, address/network and a comment string
+			tmp = net.split("#")
+			neta = tmp[0] #address/network/port
+			netc = ""
+			if len(tmp) >= 2:
+				netc = tmp[1] #comment
+			tmp = neta.split(':')
+			#split address:port into neta (address/network) and netp (port), if we have some. (: sep)
+			if len(tmp) >= 2:
+				neta = tmp[0]
+				netp = tmp[1]
+				iptables("-A %s -s %s -d %s -p tcp -m multiport --dports %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, netp, cn, group, netc))
+				iptables("-A %s -s %s -d %s -p udp -m multiport --dports %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, netp, cn, group, netc))
+			else:
+				iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
+				iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
+	else:
+		rule_file = RULES+"/"+group+'.rules'
+		try:
+			fd = open(rule_file)
+		except:
+			#if there's no LDAP ACL loaded, and there's no file loaded, complain and skip
+			log("Failed to open rule file %s for user %s, skipping group" % (rule_file, cn))
+			return
 
-	for r in parse_rules(fd):
-		iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s\"" %  (address, address, r, cn, group))
-		iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s\"" %  (address, address, r, cn, group))
-	fd.close()
+		for r in parse_rules(fd):
+			iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s file_acl\"" %  (address, address, r, cn, group))
+			iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s file_acl\"" %  (address, address, r, cn, group))
+		fd.close()
 
 def load_rules(address, cn, dev):
 	schema = load_ldap()
 	for group in schema:
-		if cn in schema[group]:
-			load_group_rule(address, cn, dev, group)
+		if cn in schema[group]['cn']:
+			networks = schema[group]['networks']
+			load_group_rule(address, cn, dev, group, networks)
+	load_per_user_rules(address, cn, dev)
 	iptables("-A %s -j DROP" % (address))
 
 def load_per_user_rules(address, cn, dev):
@@ -138,7 +167,7 @@ def load_per_user_rules(address, cn, dev):
 		return
 
 	for r in parse_rules(fd):
-		iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:user_specific_rule\"" % (address, address, r, cn))
+		iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:null user_specific_rule\"" % (address, address, r, cn))
 	fd.close()
 
 def chain_exists(name):
@@ -151,8 +180,8 @@ def add_chain(address, cn, dev):
 	iptables('-N '+address)
 	iptables('-A OUTPUT -d '+address+' -j '+address)
 	iptables('-A INPUT -s '+address+' -j '+address)
+	iptables('-A FORWARD -s '+address+' -j '+address)
 	load_rules(address, cn, dev)
-	load_per_user_rules(address, cn, dev)
 
 def update_chain(address, cn, dev):
 	del_chain(address, dev)
@@ -161,6 +190,7 @@ def update_chain(address, cn, dev):
 def del_chain(address, dev):
 	iptables('-D OUTPUT -d '+address+' -j '+address, False)
 	iptables('-D INPUT -s '+address+' -j '+address, False)
+	iptables('-D FORWARD -s '+address+' -j '+address)
 	iptables('-F '+address, False)
 	iptables('-X '+address, False)
 
