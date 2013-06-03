@@ -51,6 +51,7 @@ LDAP_FILTER='cn=vpn_*'
 CEF_FACILITY=syslog.LOG_LOCAL4
 NODENAME=os.uname()[1]
 IPTABLES='/sbin/iptables'
+IPSET='/sbin/ipset'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
@@ -103,27 +104,56 @@ def iptables(args, raiseEx=True):
 		return False
 	return True
 
+class IpsetFailure (Exception):
+	pass
+
+def ipset(args, raiseEx=True):
+	"""
+		Manages a IP Set using the ipset binary
+
+		Return: True on success, Exception on error if raiseEX=True
+				False on error if raiseEx=False
+	"""
+	command = "%s %s" % (IPSET, args)
+	status = os.system(command)
+	if status == -1:
+		raise IpsetFailure("failed to invoke ipset (%s)" % (command,))
+	status = os.WEXITSTATUS(status)
+	if raiseEx and (status != 0):
+		raise IpsetFailure("ipset exited with status %d (%s)" %
+							(status, command))
+	if (status != 0):
+		return False
+	return True
+
 def build_firewall_rule(name, usersrcip, destip, destport=None, protocol=None,
 						comment=None):
 	"""
-		Create an IPTables command line from arguments, and pass it to iptables
-		`protocol`, `destport` and `comment` are optional
-		`destport` requires `protocol`
+		This function will select the best way to insert the rule in iptables.
+		If protocol+dport are defined, create a simple iptables rule.
+		If only a destination net is set, insert it into the user's ipset.
+
+		Arguments:
+			`protocol`, `destport` and `comment` are optional
+			`destport` requires `protocol`
 	"""
-	if destport:
-		destport = '-m multiport --dports ' + destport
-		protocol = '-p ' + protocol
 	if comment:
 		comment = "-m comment --comment \"" + comment + "\""
-	rule = "-A {name} -s {srcip} -d {dstip} {proto}{dport}{comment} -j ACCEPT".format(
-				name=name,
-				srcip=usersrcip,
-				dstip=destip,
-				dport=destport,
-				proto=protocol,
-				comment=comment
-			)
-	iptables(rule)
+	if destport and protocol:
+		destport = '-m multiport --dports ' + destport
+		protocol = '-p ' + protocol
+		rule = "-A {name} -s {srcip} -d {dstip} {proto}{dport}{comment} -j ACCEPT".format(
+					name=name,
+					srcip=usersrcip,
+					dstip=destip,
+					dport=destport,
+					proto=protocol,
+					comment=comment
+				)
+		iptables(rule)
+	else:
+		entry = "--add {name} {dstip}".format(name=name, dstip=destip)
+		ipset(entry)
 
 def fetch_ips_from_file(fd):
 	"""
@@ -276,21 +306,33 @@ def add_chain(usersrcip, usercn, dev):
 		cef('Chain exists|Attempted to replace an existing chain. Failing.',
 			'dst=' + usersrcip + ' suser=' + usercn)
 		sys.exit(1)
-	iptables('-N '+usersrcip)
+	iptables('-N ' + usersrcip)
+	ipset('--create ' + usersrcip + ' nethash')
 	load_rules(usersrcip, usercn, dev)
-	iptables('-A OUTPUT -d '+usersrcip+' -j '+usersrcip)
-	iptables('-A INPUT -s '+usersrcip+' -j '+usersrcip)
-	iptables('-A FORWARD -s '+usersrcip+' -j '+usersrcip)
+	iptables('-A OUTPUT -d ' + usersrcip + ' -j ' + usersrcip)
+	iptables('-A INPUT -s ' + usersrcip + ' -j ' + usersrcip)
+	iptables('-A FORWARD -s ' + usersrcip + ' -j ' + usersrcip)
+	iptables('-I ' + usersrcip + ' -s ' + usersrcip +
+			 ' -m set --match-set ' + usersrcip + ' dst -j ACCEPT' +
+			 ' -m comment --comment "IPSet lookup for ' + usercn + ' at ' +
+			 usersrcip + '"')
+	iptables('-I ' + usersrcip + ' -m conntrack --ctstate ESTABLISHED -j ACCEPT' +
+			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
+	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usersrcip + '"' +
+			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
+	iptables('-A ' + usersrcip + ' -j DROP' +
+			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 
 def del_chain(usersrcip, dev):
 	"""
 		Delete the custom chain and all associated rules
 	"""
-	iptables('-D OUTPUT -d '+usersrcip+' -j '+usersrcip, False)
-	iptables('-D INPUT -s '+usersrcip+' -j '+usersrcip, False)
-	iptables('-D FORWARD -s '+usersrcip+' -j '+usersrcip, False)
-	iptables('-F '+usersrcip, False)
-	iptables('-X '+usersrcip, False)
+	iptables('-D OUTPUT -d ' + usersrcip + ' -j ' + usersrcip, False)
+	iptables('-D INPUT -s ' + usersrcip + ' -j ' + usersrcip, False)
+	iptables('-D FORWARD -s ' + usersrcip + ' -j ' + usersrcip, False)
+	iptables('-F ' + usersrcip, False)
+	iptables('-X ' + usersrcip, False)
+	ipset("--destroy " + usersrcip, False)
 
 def update_chain(usersrcip, usercn, dev):
 	"""
