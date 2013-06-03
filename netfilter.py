@@ -53,6 +53,14 @@ IPTABLES='/sbin/iptables'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
+def log(msg):
+	"""
+		Send a message to syslog
+	"""
+	syslog.openlog('OpenVPN', 0, syslog.LOG_DAEMON)
+	syslog.syslog(syslog.LOG_INFO, msg)
+	syslog.closelog()
+
 def cef(msg1, msg2):
 	"""
 		Build a log message in CEF format and send it to syslog
@@ -76,31 +84,30 @@ class IptablesFailure (Exception):
 	pass
 
 def iptables(args, raiseEx=True):
-	"""False on error if raiseEx=True, True on success, Exception otherwise"""
+	"""
+		Load the firewall rule received as argument on the local system, using
+		the iptables binary
+
+		Return: True on success, Exception on error if raiseEX=True
+				False on error if raiseEx=False
+	"""
 	command = "%s %s" % (IPTABLES, args)
 	status = os.system(command)
 	if status == -1:
 		raise IptablesFailure("failed to invoke iptables (%s)" % (command,))
 	status = os.WEXITSTATUS(status)
 	if raiseEx and (status != 0):
-		raise IptablesFailure("iptables exited with status %d (%s)" % (status, command))
+		raise IptablesFailure("iptables exited with status %d (%s)" %
+								(status, command))
 	if (status != 0):
 		return False
 	return True
 
-def log(msg):
-	syslog.openlog('OpenVPN', 0, syslog.LOG_DAEMON)
-	syslog.syslog(syslog.LOG_INFO, msg)
-	syslog.closelog()
 
-def cef(msg1, msg2):
-	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
-	cefmsg = 'CEF:0|Mozilla|OpenVPN|1.0||'+msg1+'|5|'+msg2+' dhost='+NODENAME
-	syslog.syslog(syslog.LOG_INFO, cefmsg)
-	syslog.closelog()
-#	log(cefmsg)
-
-def parse_rules(fd):
+def fetch_ips_from_file(fd):
+	"""
+		Read the IPs from a local file and return them into a dictionary
+	"""
 	rules = []
 	line = fd.readline()
 	while line != '':
@@ -112,30 +119,51 @@ def parse_rules(fd):
 	return rules
 
 def load_ldap():
+	"""
+		Query the LDAP directory for a full list of VPN groups.
+		We don't filter on the user because the format of the user DN can vary.
+		LDAP returns group members and IPs, that are stripped and parsed
+		into a dictionary.
+
+		Returns: a sdictionary of the form
+			schema = {	'vpn_group1':
+							{'cn':
+								['noob1@mozilla.com',
+								'noob2@mozilla.com'],
+							'networks':
+								['192.168.0.1/24',
+								'10.0.0.1/16:80 #comment',
+								'10.0.0.1:22']
+							},
+						'vpn_group2': ...
+					 }
+	"""
 	conn = ldap.initialize(LDAP_URL)
 	conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PASSWD)
-	res = conn.search_s(LDAP_BASE_DN, ldap.SCOPE_SUBTREE, LDAP_FILTER, ['cn', 'member', 'ipHostNumber'])
-#schema = {'vpn_example1': {'cn': ['noob1@mozilla.com', 'noob2@mozilla.com'],
-#'networks': ['192.168.0.1/24', '10.0.0.1/16:80 #comment', '10.0.0.1:22']}, 'vpn_example2': ...}
+	res = conn.search_s(LDAP_BASE_DN, ldap.SCOPE_SUBTREE, LDAP_FILTER,
+						['cn', 'member', 'ipHostNumber'])
 	schema = {}
 	for grp in res:
 		ulist = []
 		hlist = []
 		group = grp[1]['cn'][0]
-
 		for u in grp[1]['member']:
 			try:
 				ulist.append(u.split('=')[1].split(',')[0])
 			except:
-				log("Failed to load user from LDAP: %s at group %s, skipping" % (u, group))
+				log("Failed to load user from LDAP: %s at group %s, skipping" %
+					(u, group))
 		if grp[1].has_key('ipHostNumber'):
 			hlist = grp[1]['ipHostNumber']
 		schema[group] = {'cn': ulist, 'networks': hlist}
 	return schema
 
-def load_group_rule(address, cn, dev, group, networks):
-	#Some of the parsing is hackish (accomodating the ever-changing hack to have attributes inside an attribute in LDAP)
-	#this probably needs some refactoring when we're happy with the rule format
+def load_group_rule(usersrcip, usercn, dev, group, networks):
+	"""
+		Receive the LDAP ACLs for this user, and parse them into iptables rules
+		The parsing requires extracting the comment from IP usersrcipes, see below
+
+	"""
 	if len(networks) != 0:
 		for net in networks:
 			#the attribute stored in net (ipHostNumber) includes 2 values, address/network and a comment string
@@ -155,12 +183,13 @@ def load_group_rule(address, cn, dev, group, networks):
 				iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
 				iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
 	else:
-		rule_file = RULES+"/"+group+'.rules'
+		rule_file = RULES + "/" + group + '.rules'
 		try:
 			fd = open(rule_file)
 		except:
-			#if there's no LDAP ACL loaded, and there's no file loaded, complain and skip
-			log("Failed to open rule file %s for user %s, skipping group" % (rule_file, cn))
+			# Skip if file is not found
+			log("Failed to open rule file '%s' for user '%s', skipping group" %
+				(rule_file, usercn))
 			return
 
 		for r in parse_rules(fd):
@@ -168,52 +197,87 @@ def load_group_rule(address, cn, dev, group, networks):
 			iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s file_acl\"" %  (address, address, r, cn, group))
 		fd.close()
 
-def load_rules(address, cn, dev):
-	schema = load_ldap()
-	for group in schema:
-		if cn in schema[group]['cn']:
-			networks = schema[group]['networks']
-			load_group_rule(address, cn, dev, group, networks)
-	load_per_user_rules(address, cn, dev)
-	iptables("-A %s -j DROP" % (address))
+def load_per_user_rules(usersrcip, usercn, dev):
+	"""
+		Load destination IPs from a flat file that exists on the VPN gateway,
+		and create the firewall rules accordingly.
+		This feature does not use LDAP at all.
 
-def load_per_user_rules(address, cn, dev):
-	rule_file = RULES+"/"+PER_USER_RULES_PREFIX+cn
+		This feature is rarely used, and thus the function will simply exit
+		in silence if no file is found.
+	"""
+	rule_file = RULES + "/" + PER_USER_RULES_PREFIX + usercn
 	try:
 		fd = open(rule_file)
 	except:
-# by default, there's generally no per user rules, so fail in silence
 		return
-
-	for r in parse_rules(fd):
 		iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:null user_specific_rule\"" % (address, address, r, cn))
+	for destip in fetch_ips_from_file(fd):
 	fd.close()
 
+def load_rules(usersrcip, usercn, dev):
+	"""
+		First, get the list of VPN groups, with members and IPs, from LDAP.
+		Second, find the groups that the user belongs to, and create the rules.
+		Third, if per user rules exist, load them
+		And finally, insert a DROP rule at the bottom of the ruleset
+	"""
+	schema = load_ldap()
+	for group in schema:
+		if usercn in schema[group]['cn']:
+			networks = schema[group]['networks']
+			load_group_rule(usersrcip, usercn, dev, group, networks)
+	load_per_user_rules(usersrcip, usercn, dev)
+	iptables("-A %s -j DROP" % (usersrcip))
+
 def chain_exists(name):
+	"""
+		Test existance of a chain via the iptables binary
+	"""
 	return iptables('-L '+name, False)
 
-def add_chain(address, cn, dev):
-	if chain_exists(address):
-		cef('Chain exists|Attempted to replace an existing chain. Failing.', 'dst='+address+' suser='+cn)
+def add_chain(usersrcip, usercn, dev):
+	"""
+		Create a custom chain for the VPN user, named using his source IP
+		Load the LDAP rules into the custom chain
+		Jump traffic to the custom chain from the INPUT,OUTPUT & FORWARD chains
+	"""
+	if chain_exists(usersrcip):
+		cef('Chain exists|Attempted to replace an existing chain. Failing.',
+			'dst=' + usersrcip + ' suser=' + usercn)
 		sys.exit(1)
-	iptables('-N '+address)
-	iptables('-A OUTPUT -d '+address+' -j '+address)
-	iptables('-A INPUT -s '+address+' -j '+address)
-	iptables('-A FORWARD -s '+address+' -j '+address)
-	load_rules(address, cn, dev)
+	iptables('-N '+usersrcip)
+	load_rules(usersrcip, usercn, dev)
+	iptables('-A OUTPUT -d '+usersrcip+' -j '+usersrcip)
+	iptables('-A INPUT -s '+usersrcip+' -j '+usersrcip)
+	iptables('-A FORWARD -s '+usersrcip+' -j '+usersrcip)
 
-def update_chain(address, cn, dev):
-	del_chain(address, dev)
-	add_chain(address, dev)
-	
-def del_chain(address, dev):
-	iptables('-D OUTPUT -d '+address+' -j '+address, False)
-	iptables('-D INPUT -s '+address+' -j '+address, False)
-	iptables('-D FORWARD -s '+address+' -j '+address, False)
-	iptables('-F '+address, False)
-	iptables('-X '+address, False)
+def del_chain(usersrcip, dev):
+	"""
+		Delete the custom chain and all associated rules
+	"""
+	iptables('-D OUTPUT -d '+usersrcip+' -j '+usersrcip, False)
+	iptables('-D INPUT -s '+usersrcip+' -j '+usersrcip, False)
+	iptables('-D FORWARD -s '+usersrcip+' -j '+usersrcip, False)
+	iptables('-F '+usersrcip, False)
+	iptables('-X '+usersrcip, False)
+
+def update_chain(usersrcip, usercn, dev):
+	"""
+		Wrapper function around add and delete
+	"""
+	del_chain(usersrcip, dev)
+	add_chain(usersrcip, usercn, dev)
 
 def main():
+	"""
+		Main function, called with 3 arguments
+		- `operation` is either 'add', 'delete' or 'update'
+		- `user src ip` is the source IP address of the VPN user, as allocated
+		  by openvpn.
+		- `cn` is the openvpn login that will be queried in LDAP
+		these arguments are provided via the `learn-address` openvpn hook
+	"""
 	try:
 		device = os.environ['dev']
 	except:
@@ -227,25 +291,30 @@ def main():
 
 	if len(sys.argv) < 3:
 		print("Forgot something, like, arguments?")
-		print("USAGE: %s <operation> <address> [cn]" % sys.argv[0])
+		print("USAGE: %s <operation> <user src ip> [cn]" % sys.argv[0])
 		sys.exit(1)
 
 	operation = sys.argv[1]
-	address = sys.argv[2]
+	usersrcip = sys.argv[2]
 	if len(sys.argv) == 4:
-		cn = sys.argv[3]
+		usercn = sys.argv[3]
 	else:
-		cn = None
+		usercn = None
 
 	if operation == 'add':
-		cef('User Login Successful|OpenVPN endpoint connected', 'src='+client_ip+' spt='+client_port+' dst='+address+' suser='+cn)
-		add_chain(address, cn, device)
+		cef('User Login Successful|OpenVPN endpoint connected',
+			'src=' + client_ip + ' spt='+client_port + ' dst=' + usersrcip +
+			' suser=' + usercn)
+		add_chain(usersrcip, usercn, device)
 	elif operation == 'update':
-		cef('User Login Successful|OpenVPN endpoint re-connected', 'src='+client_ip+' spt='+client_port+' dst='+address+' suser='+cn)
-		update_chain(address, cn, device)
+		cef('User Login Successful|OpenVPN endpoint re-connected',
+			'src=' + client_ip + ' spt=' + client_port + ' dst=' + usersrcip +
+			' suser=' + usercn)
+		update_chain(usersrcip, usercn, device)
 	elif operation == 'delete':
-		cef('User Login Successful|OpenVPN endpoint disconnected', 'dst='+address)
-		del_chain(address, device)
+		cef('User Login Successful|OpenVPN endpoint disconnected',
+			'dst=' + usersrcip)
+		del_chain(usersrcip, device)
 	else:
 		log('Unknown operation')
 	sys.exit(0)
