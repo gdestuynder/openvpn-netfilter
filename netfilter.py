@@ -103,6 +103,27 @@ def iptables(args, raiseEx=True):
 		return False
 	return True
 
+def build_firewall_rule(name, usersrcip, destip, destport=None, protocol=None,
+						comment=None):
+	"""
+		Create an IPTables command line from arguments, and pass it to iptables
+		`protocol`, `destport` and `comment` are optional
+		`destport` requires `protocol`
+	"""
+	if destport:
+		destport = '-m multiport --dports ' + destport
+		protocol = '-p ' + protocol
+	if comment:
+		comment = "-m comment --comment \"" + comment + "\""
+	rule = "-A {name} -s {srcip} -d {dstip} {proto}{dport}{comment} -j ACCEPT".format(
+				name=name,
+				srcip=usersrcip,
+				dstip=destip,
+				dport=destport,
+				proto=protocol,
+				comment=comment
+			)
+	iptables(rule)
 
 def fetch_ips_from_file(fd):
 	"""
@@ -177,11 +198,11 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 			if len(tmp) >= 2:
 				neta = tmp[0]
 				netp = tmp[1]
-				iptables("-A %s -s %s -d %s -p tcp -m multiport --dports %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, netp, cn, group, netc))
-				iptables("-A %s -s %s -d %s -p udp -m multiport --dports %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, netp, cn, group, netc))
+				for protocol in ['tcp', 'udp']:
+					build_firewall_rule(usersrcip, usersrcip, destip, destport,
+										protocol, comment)
 			else:
-				iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
-				iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s ldap_acl %s\"" % (address, address, neta, cn, group, netc))
+				build_firewall_rule(usersrcip ,usersrcip, destip, '', '', comment)
 	else:
 		rule_file = RULES + "/" + group + '.rules'
 		try:
@@ -192,9 +213,11 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 				(rule_file, usercn))
 			return
 
-		for r in parse_rules(fd):
-			iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:%s file_acl\"" %  (address, address, r, cn, group))
-			iptables("-A %s -d %s -s %s -j ACCEPT -m comment --comment \"%s:%s file_acl\"" %  (address, address, r, cn, group))
+		comment = usercn + ':' + group + ' file_acl'
+		for destip in fetch_ips_from_file(fd):
+			# create one rule for each direction
+			build_firewall_rule(usersrcip, usersrcip, destip, '', '', comment)
+			build_firewall_rule(usersrcip, destip, usersrcip, '', '', comment)
 		fd.close()
 
 def load_per_user_rules(usersrcip, usercn, dev):
@@ -211,8 +234,9 @@ def load_per_user_rules(usersrcip, usercn, dev):
 		fd = open(rule_file)
 	except:
 		return
-		iptables("-A %s -s %s -d %s -j ACCEPT -m comment --comment \"%s:null user_specific_rule\"" % (address, address, r, cn))
+	comment = usercn + ":null user_specific_rule"
 	for destip in fetch_ips_from_file(fd):
+		build_firewall_rule(usersrcip, usersrcip, destip, '', '', comment)
 	fd.close()
 
 def load_rules(usersrcip, usercn, dev):
