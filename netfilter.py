@@ -209,7 +209,7 @@ def load_ldap():
 		schema[group] = {'cn': ulist, 'networks': hlist}
 	return schema
 
-def load_group_rule(usersrcip, usercn, dev, group, networks):
+def load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets):
 	"""
 		Receive the LDAP ACLs for this user, and parse them into iptables rules
 		If no LDAP rule is submitted, try to load them from a local file
@@ -223,7 +223,13 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 				on the ':' character to extract IP and Port
 			"""
 			ipHostNumber = net.split("#")
-			destination = ipHostNumber[0]
+			destination = ipHostNumber[0].strip()
+
+			if destination in uniq_nets:
+				""" Skip duplicated destinations """
+				continue
+			uniq_nets.append(destination)
+
 			ldapcomment = ""
 			if len(ipHostNumber) >= 2:
 				ldapcomment = ipHostNumber[1] # extract the comment
@@ -282,11 +288,12 @@ def load_rules(usersrcip, usercn, dev):
 		Third, if per user rules exist, load them
 		And finally, insert a DROP rule at the bottom of the ruleset
 	"""
+	uniq_nets = list()
 	schema = load_ldap()
 	for group in schema:
 		if usercn in schema[group]['cn']:
 			networks = schema[group]['networks']
-			load_group_rule(usersrcip, usercn, dev, group, networks)
+			load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets)
 	load_per_user_rules(usersrcip, usercn, dev)
 	iptables("-A %s -j DROP" % (usersrcip))
 
