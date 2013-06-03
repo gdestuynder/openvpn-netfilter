@@ -53,6 +53,25 @@ IPTABLES='/sbin/iptables'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
+def cef(msg1, msg2):
+	"""
+		Build a log message in CEF format and send it to syslog
+	"""
+	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
+	cefmsg = 'CEF:{v}|{vendor}|{dev}|{dev_v}|{sig}|{name}|{lvl}|{ext}'.format(
+		v='0',
+		vendor='Mozilla',
+		dev='OpenVPN',
+		dev_v='1.0',
+		sig='',
+		name=msg1,
+		lvl='5',
+		ext=msg2 + ' dhost=' + NODENAME,
+	)
+	syslog.syslog(syslog.LOG_INFO, cefmsg)
+	syslog.closelog()
+#	log(cefmsg)
+
 class IptablesFailure (Exception):
 	pass
 
