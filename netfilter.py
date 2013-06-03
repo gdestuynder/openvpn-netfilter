@@ -23,6 +23,7 @@
 #
 # Contributor(s):
 # gdestuynder@mozilla.com (initial author)
+# jvehent@mozilla.com (refactoring, ipset support)
 #
 # Alternatively, the contents of this file may be used under the terms of
 # either the GNU General Public License Version 2 or later (the "GPL"), or
