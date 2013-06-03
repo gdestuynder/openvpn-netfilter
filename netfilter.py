@@ -187,17 +187,23 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 	"""
 	if len(networks) != 0:
 		for net in networks:
-			#the attribute stored in net (ipHostNumber) includes 2 values, address/network and a comment string
-			tmp = net.split("#")
-			neta = tmp[0] #address/network/port
-			netc = ""
-			if len(tmp) >= 2:
-				netc = tmp[1] #comment
-			tmp = neta.split(':')
-			#split address:port into neta (address/network) and netp (port), if we have some. (: sep)
-			if len(tmp) >= 2:
-				neta = tmp[0]
-				netp = tmp[1]
+			"""
+				the attribute stored in net (ipHostNumber) contains 2 values:
+				'<CIDR usersrcip:port> # <comment>'
+				split on the '#' character to extract the comment, then split
+				on the ':' character to extract IP and Port
+			"""
+			ipHostNumber = net.split("#")
+			destination = ipHostNumber[0]
+			ldapcomment = ""
+			if len(ipHostNumber) >= 2:
+				ldapcomment = ipHostNumber[1] # extract the comment 
+			destarray = destination.split(':')
+			destip = destarray[0]
+			destport = ''
+			comment = usercn + ':' + group + ' ldap_acl ' + ldapcomment
+			if len(destarray) >= 2:
+				destport = destarray[1]
 				for protocol in ['tcp', 'udp']:
 					build_firewall_rule(usersrcip, usersrcip, destip, destport,
 										protocol, comment)
