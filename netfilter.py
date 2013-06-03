@@ -233,10 +233,11 @@ def load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets):
 			ldapcomment = ""
 			if len(ipHostNumber) >= 2:
 				ldapcomment = ipHostNumber[1] # extract the comment
+			comment = usercn + ':' + group + ' ldap_acl ' + ldapcomment
+
 			destarray = destination.split(':')
 			destip = destarray[0]
 			destport = ''
-			comment = usercn + ':' + group + ' ldap_acl ' + ldapcomment
 			if len(destarray) >= 2:
 				destport = destarray[1]
 				for protocol in ['tcp', 'udp']:
@@ -295,13 +296,12 @@ def load_rules(usersrcip, usercn, dev):
 			networks = schema[group]['networks']
 			load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets)
 	load_per_user_rules(usersrcip, usercn, dev)
-	iptables("-A %s -j DROP" % (usersrcip))
 
 def chain_exists(name):
 	"""
 		Test existance of a chain via the iptables binary
 	"""
-	return iptables('-L '+name, False)
+	return iptables('-L ' + name, False)
 
 def add_chain(usersrcip, usercn, dev):
 	"""
