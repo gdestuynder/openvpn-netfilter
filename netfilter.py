@@ -78,7 +78,6 @@ def cef(msg1, msg2):
 	)
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
-#	log(cefmsg)
 
 class IptablesFailure (Exception):
 	pass
@@ -182,8 +181,7 @@ def load_ldap():
 def load_group_rule(usersrcip, usercn, dev, group, networks):
 	"""
 		Receive the LDAP ACLs for this user, and parse them into iptables rules
-		The parsing requires extracting the comment from IP usersrcipes, see below
-
+		If no LDAP rule is submitted, try to load them from a local file
 	"""
 	if len(networks) != 0:
 		for net in networks:
@@ -197,7 +195,7 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 			destination = ipHostNumber[0]
 			ldapcomment = ""
 			if len(ipHostNumber) >= 2:
-				ldapcomment = ipHostNumber[1] # extract the comment 
+				ldapcomment = ipHostNumber[1] # extract the comment
 			destarray = destination.split(':')
 			destip = destarray[0]
 			destport = ''
@@ -208,7 +206,8 @@ def load_group_rule(usersrcip, usercn, dev, group, networks):
 					build_firewall_rule(usersrcip, usersrcip, destip, destport,
 										protocol, comment)
 			else:
-				build_firewall_rule(usersrcip ,usersrcip, destip, '', '', comment)
+				build_firewall_rule(usersrcip ,usersrcip, destip, '', '',
+									comment)
 	else:
 		rule_file = RULES + "/" + group + '.rules'
 		try:
