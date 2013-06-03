@@ -109,7 +109,7 @@ class IpsetFailure (Exception):
 
 def ipset(args, raiseEx=True):
 	"""
-		Manages a IP Set using the ipset binary
+		Manages an IP Set using the ipset binary
 
 		Return: True on success, Exception on error if raiseEX=True
 				False on error if raiseEx=False
