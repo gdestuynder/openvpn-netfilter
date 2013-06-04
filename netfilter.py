@@ -134,8 +134,8 @@ def build_firewall_rule(name, usersrcip, destip, destport=None, protocol=None,
 		If only a destination net is set, insert it into the user's ipset.
 
 		Arguments:
-			`protocol`, `destport` and `comment` are optional
-			`destport` requires `protocol`
+			'protocol', 'destport' and 'comment' are optional
+			'destport' requires 'protocol'
 	"""
 	if comment:
 		comment = "-m comment --comment \"" + comment + "\""
@@ -359,11 +359,11 @@ def update_chain(usersrcip, usercn, dev):
 def main():
 	"""
 		Main function, called with 3 arguments
-		- `operation` is either 'add', 'delete' or 'update'
-		- `user src ip` is the source IP address of the VPN user, as allocated
+		- 'operation' is either 'add', 'delete' or 'update'
+		- 'user src ip' is the source IP address of the VPN user, as allocated
 		  by openvpn.
-		- `cn` is the openvpn login that will be queried in LDAP
-		these arguments are provided via the `learn-address` openvpn hook
+		- 'cn' is the openvpn login that will be queried in LDAP
+		these arguments are provided via the 'learn-address' openvpn hook
 	"""
 	try:
 		device = os.environ['dev']
