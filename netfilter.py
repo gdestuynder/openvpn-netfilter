@@ -288,14 +288,19 @@ def load_rules(usersrcip, usercn, dev):
 		Second, find the groups that the user belongs to, and create the rules.
 		Third, if per user rules exist, load them
 		And finally, insert a DROP rule at the bottom of the ruleset
+
+		Return: A string with the LDAP groups the user belongs to
 	"""
+	usergroups = ""
 	uniq_nets = list()
 	schema = load_ldap()
 	for group in schema:
 		if usercn in schema[group]['cn']:
 			networks = schema[group]['networks']
 			load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets)
+			usergroups += group + ';'
 	load_per_user_rules(usersrcip, usercn, dev)
+	return usergroups
 
 def chain_exists(name):
 	"""
@@ -309,20 +314,23 @@ def add_chain(usersrcip, usercn, dev):
 		Load the LDAP rules into the custom chain
 		Jump traffic to the custom chain from the INPUT,OUTPUT & FORWARD chains
 	"""
+	usergroups = ""
 	if chain_exists(usersrcip):
 		cef('Chain exists|Attempted to replace an existing chain. Failing.',
 			'dst=' + usersrcip + ' suser=' + usercn)
 		sys.exit(1)
 	iptables('-N ' + usersrcip)
 	ipset('--create ' + usersrcip + ' nethash')
-	load_rules(usersrcip, usercn, dev)
+	usergroups = load_rules(usersrcip, usercn, dev)
 	iptables('-A OUTPUT -d ' + usersrcip + ' -j ' + usersrcip)
 	iptables('-A INPUT -s ' + usersrcip + ' -j ' + usersrcip)
 	iptables('-A FORWARD -s ' + usersrcip + ' -j ' + usersrcip)
+	comment = usercn + ' groups: ' + usergroups
+	if len(comment) > 254:
+		comment = comment[:243] + '..truncated...'
 	iptables('-I ' + usersrcip + ' -s ' + usersrcip +
 			 ' -m set --match-set ' + usersrcip + ' dst -j ACCEPT' +
-			 ' -m comment --comment "IPSet lookup for ' + usercn + ' at ' +
-			 usersrcip + '"')
+			 ' -m comment --comment "' + comment[:254] + '"')
 	iptables('-I ' + usersrcip + ' -m conntrack --ctstate ESTABLISHED -j ACCEPT' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usersrcip + '"' +
