@@ -51,7 +51,7 @@ LDAP_FILTER='cn=vpn_*'
 CEF_FACILITY=syslog.LOG_LOCAL4
 NODENAME=os.uname()[1]
 IPTABLES='/sbin/iptables'
-IPSET='/sbin/ipset'
+IPSET='/usr/sbin/ipset'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
