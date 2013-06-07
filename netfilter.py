@@ -52,7 +52,7 @@ CEF_FACILITY=syslog.LOG_LOCAL4
 NODENAME=os.uname()[1]
 IPTABLES='/sbin/iptables'
 IPSET='/usr/sbin/ipset'
-RULESCLEANUP='/etc/openvpn/vpn-netfilter-cleanup-ip.sh'
+RULESCLEANUP='<%= confdir %>/plugins/netfilter/vpn-netfilter-cleanup-ip.sh'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
