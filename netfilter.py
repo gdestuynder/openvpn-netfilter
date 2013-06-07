@@ -139,10 +139,10 @@ def build_firewall_rule(name, usersrcip, destip, destport=None, protocol=None,
 			'destport' requires 'protocol'
 	"""
 	if comment:
-		comment = "-m comment --comment \"" + comment + "\""
+		comment = " -m comment --comment \"" + comment + "\""
 	if destport and protocol:
-		destport = '-m multiport --dports ' + destport
-		protocol = '-p ' + protocol
+		destport = ' -m multiport --dports ' + destport
+		protocol = ' -p ' + protocol
 		rule = "-A {name} -s {srcip} -d {dstip} {proto}{dport}{comment} -j ACCEPT".format(
 					name=name,
 					srcip=usersrcip,
@@ -337,7 +337,7 @@ def add_chain(usersrcip, usercn, dev):
 			 ' -m comment --comment "' + comment[:254] + '"')
 	iptables('-I ' + usersrcip + ' -m conntrack --ctstate ESTABLISHED -j ACCEPT' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
-	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usersrcip + '"' +
+	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usersrcip + ' "' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j DROP' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
