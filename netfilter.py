@@ -52,6 +52,7 @@ CEF_FACILITY=syslog.LOG_LOCAL4
 NODENAME=os.uname()[1]
 IPTABLES='/sbin/iptables'
 IPSET='/usr/sbin/ipset'
+RULESCLEANUP='/etc/openvpn/vpn-netfilter-cleanup-ip.sh'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 
@@ -314,6 +315,9 @@ def add_chain(usersrcip, usercn, dev):
 		Load the LDAP rules into the custom chain
 		Jump traffic to the custom chain from the INPUT,OUTPUT & FORWARD chains
 	"""
+	# safe cleanup, just in case
+	command = "%s %s" % (RULESCLEANUP, usersrcip)
+	status = os.system(command)
 	usergroups = ""
 	if chain_exists(usersrcip):
 		cef('Chain exists|Attempted to replace an existing chain. Failing.',
@@ -348,6 +352,9 @@ def del_chain(usersrcip, dev):
 	iptables('-F ' + usersrcip, False)
 	iptables('-X ' + usersrcip, False)
 	ipset("--destroy " + usersrcip, False)
+	# safe cleanup, just in case
+	command = "%s %s" % (RULESCLEANUP, usersrcip)
+	status = os.system(command)
 
 def update_chain(usersrcip, usercn, dev):
 	"""
