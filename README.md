@@ -19,7 +19,7 @@ For any OpenVPN server configuration, also add this (or a sudo wrapper to this s
     keepalive 10 20
 
 Change the settings at the top of the netfilter.py file. In general, you'll want to store the settings in /etc/openvpn/netfitler/rules/* and have a list of files such as "vpn_teamA.rules". Users belonging to the LDAP group name teamA will get those rules.
-You'll also want to have /etc/openvpn/netfilter/users/* for per user rules.
+You'll also want to have /etc/openvpn/netfilter/users/* for per user rules. You also want to make sure that _the paths_ of the `iptables`, `ipset`, and `vpn-netfilter-cleanup-ip.sh` commands are correct for your system.
 
 Don't forget to push the proper routing rules for the network/IPs you allow.
 
@@ -39,22 +39,42 @@ learn-address is an OpenVPN hook called when the remote client is being set an I
 
 If the script fails for any reason, OpenVPN will deny packets to come through.
 
-Each user access is represented by a new netfilter chain named by it's local VPN ip, such as:
+When a user successfully connects to OpenVPN, netfilter.py will create a set for firewall rules for this user. The custom rules are added into a new chain named after the VPN IP of the user:
 
-    Chain INPUT (policy ACCEPT)
-    target     prot opt source               destination         
-    10.22.248.10  all  --  10.22.248.10         anywhere 
+    Chain 172.16.248.50 (3 references)
+     pkts bytes target     prot opt in     out     source               destination
+     5925  854K ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0           ctstate ESTABLISHED /* ulfr at 172.16.248.50 */
+      688 46972 ACCEPT     all  --  *      *       172.16.248.50        0.0.0.0/0           match-set 172.16.248.50 dst /* ulfr groups: vpn_caribou;vpn_pokemon;vpn_ninjas;*/
+       24  2016 LOG        all  --  *      *       0.0.0.0/0            0.0.0.0/0           /* ulfr at 172.16.248.50 */ LOG flags 0 level 4 prefix `DROP 172.16.248.50'
+       24  2016 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           /* ulfr at 172.16.248.50 */
 
-And the equivalent OUTPUT chain.
+A jump target is added to INPUT, OUTPUT and FORWARD to send all traffic originating from the VPN IP to the custom chain:
 
-
-The user chain looks like:
-
-    Chain 10.22.248.10 (2 references)
-    target     prot opt source               destination         
-    ACCEPT     all  --  10.22.248.10         10.250.64.0/22      /* username:vpn_teamname */ 
-    ACCEPT     all  --  10.250.64.0/22       10.22.248.10        /* username:vpn_teamname */
-    DROP       all  --  any                  any
-
+    Chain INPUT (policy ACCEPT 92762 packets, 15M bytes)
+     3320  264K 172.16.248.50  all  --  *      *       172.16.248.50         0.0.0.0/0
+    Chain OUTPUT (policy ACCEPT 136K packets, 138M bytes)
+     2196  549K 172.16.248.50  all  --  *      *       0.0.0.0/0            172.16.248.50
+    Chain FORWARD (policy ACCEPT 126K packets, 127M bytes)
+     1120 90205 172.16.248.50  all  --  *      *       172.16.248.50         0.0.0.0/0
 
 You'll notice the comments are there for ease of troubleshooting, you can grep through "iptables -L -n" and find out which user or group has access to what easily.
+
+To reduce the amount of rules created, when the LDAP ACLs only contains a list of destination subnets, these subnets are added into an IPSet. The IPSet is named after the VPN IP of the user.
+
+    --- IPSET HASH TABLE ---
+    Name: 172.16.248.50
+    Type: hash:net
+    Header: family inet hashsize 1024 maxelem 65536
+    Size in memory: 17968
+    References: 1
+    Members:
+    172.39.72.0/24
+    172.31.0.0/16
+    172.11.92.150
+    42.89.217.202
+
+MAINTENANCE
+===========
+You can list the rules and sets of a particular user with the script named `vpn-fw-find-user.sh`.
+
+You can delete all of the rules and sets of a given VPN IP using the script named `vpn-netfilter-cleanup-ip.sh`.
