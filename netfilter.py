@@ -337,8 +337,8 @@ def add_chain(usersrcip, usercn, dev):
 			 ' -m comment --comment "' + comment[:254] + '"')
 	iptables('-I ' + usersrcip + ' -m conntrack --ctstate ESTABLISHED -j ACCEPT' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
-	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usersrcip + ' "' +
-			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
+	iptables('-A ' + usersrcip + ' -j LOG --log-prefix "DROP ' + usercn[:23] +
+			 ' "' + ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j DROP' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 
