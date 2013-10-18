@@ -64,20 +64,21 @@ def log(msg):
 	syslog.syslog(syslog.LOG_INFO, msg)
 	syslog.closelog()
 
-def cef(msg1, msg2):
+def cef(title, msg, ext):
 	"""
 		Build a log message in CEF format and send it to syslog
 	"""
 	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
-	cefmsg = 'CEF:{v}|{deviceVendor}|{deviceProduct}|{deviceVersion}|{name}|{message}|{deviceSeverity}|{ext}'.format(
+	cefmsg = 'CEF:{v}|{deviceVendor}|{deviceProduct}|{deviceVersion}|{signatureID}|{name}|{message}|{deviceSeverity}|{extension}'.format(
 		v='0',
 		deviceVendor='Mozilla',
 		deviceProduct='OpenVPN',
 		deviceVersion='1.0',
-		name=msg1,
-		message=msg2,
+		signatureID='0',
+		name=title,
+		message=msg,
 		deviceSeverity='5',
-		ext=' dhost=' + NODENAME,
+		extension=ext+' dhost=' + NODENAME,
 	)
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
@@ -396,17 +397,17 @@ def main():
 		usercn = None
 
 	if operation == 'add':
-		cef('User Login Successful|OpenVPN endpoint connected',
+		cef('User Login Successful', 'OpenVPN endpoint connected',
 			'src=' + client_ip + ' spt='+client_port + ' dst=' + usersrcip +
 			' suser=' + usercn)
 		add_chain(usersrcip, usercn, device)
 	elif operation == 'update':
-		cef('User Login Successful|OpenVPN endpoint re-connected',
+		cef('User Login Successful', 'OpenVPN endpoint re-connected',
 			'src=' + client_ip + ' spt=' + client_port + ' dst=' + usersrcip +
 			' suser=' + usercn)
 		update_chain(usersrcip, usercn, device)
 	elif operation == 'delete':
-		cef('User Login Successful|OpenVPN endpoint disconnected',
+		cef('User Login Successful', 'OpenVPN endpoint disconnected',
 			'dst=' + usersrcip)
 		del_chain(usersrcip, device)
 	else:
