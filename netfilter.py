@@ -41,6 +41,10 @@ import os
 import sys
 import ldap
 import syslog
+import fcntl
+import time
+import signal, errno
+from contextlib import contextmanager
 
 LDAP_URL='ldap://<%= ldap_server %>'
 LDAP_BIND_DN='uid=<%= bind_user %>,ou=logins,dc=mozilla'
@@ -55,6 +59,8 @@ IPSET='/usr/sbin/ipset'
 RULESCLEANUP='<%= confdir %>/plugins/netfilter/vpn-netfilter-cleanup-ip.sh'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
+LOCKPATH='/var/run/openvpn_netfilter.lock'
+LOCKWAITTIME=2
 
 def log(msg):
 	"""
@@ -82,6 +88,37 @@ def cef(title, msg, ext):
 	)
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
+
+@contextmanager
+def lock_timeout(seconds):
+	def timeout_handler(signum, frame):
+		pass
+	original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+	try:
+		signal.alarm(seconds)
+		yield
+	finally:
+		signal.alarm(0)
+		signal.signal(signal.SIGALRM, original_handler)
+
+def wait_for_lock():
+	acquired = False
+	while not acquired:
+		with lock_timeout(LOCKWAITTIME):
+			lockfd = open(LOCKPATH, 'a+')
+			try:
+				fcntl.flock(lockfd, fcntl.LOCK_EX)
+			except (IOError, OSError) as e:
+				log("Failed to acquire execution lock on '%s'. Error='%s'. Waiting %s seconds before retrying." %
+					(LOCKPATH, e.errno, LOCKWAITTIME))
+			else:
+				acquired = True
+	return lockfd
+
+def free_lock(lockfd):
+	fcntl.flock(lockfd, fcntl.LOCK_UN)
+	lockfd.close()
+	return
 
 class IptablesFailure (Exception):
 	pass
@@ -396,6 +433,9 @@ def main():
 	else:
 		usercn = None
 
+	# we only authorize one script execution at a time
+	lockfd = wait_for_lock()
+
 	if operation == 'add':
 		cef('User Login Successful', 'OpenVPN endpoint connected',
 			'src=' + client_ip + ' spt='+client_port + ' dst=' + usersrcip +
@@ -412,7 +452,10 @@ def main():
 		del_chain(usersrcip, device)
 	else:
 		log('Unknown operation')
+
+	free_lock(lockfd)
+
 	sys.exit(0)
 
 if __name__ == "__main__":
-    main()
+	main()
