@@ -80,10 +80,10 @@ def cef(title, msg, ext):
 		deviceVendor='Mozilla',
 		deviceProduct='OpenVPN',
 		deviceVersion='1.0',
-		signatureID=msg,
+		signatureID='0',
 		name=title,
 		severity='5',
-		extension=ext+' dhost=' + NODENAME,
+		extension=ext+' msg= '+msg+' dhost=' + NODENAME,
 	)
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
