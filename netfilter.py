@@ -75,14 +75,13 @@ def cef(title, msg, ext):
 		Build a log message in CEF format and send it to syslog
 	"""
 	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
-	cefmsg = 'CEF:{v}|{deviceVendor}|{deviceProduct}|{deviceVersion}|{signatureID}|{name}|{severity}|{message}|{extension}'.format(
+	cefmsg = 'CEF:{v}|{deviceVendor}|{deviceProduct}|{deviceVersion}|{signatureID}|{name}|{severity}|{extension}'.format(
 		v='0',
 		deviceVendor='Mozilla',
 		deviceProduct='OpenVPN',
 		deviceVersion='1.0',
-		signatureID='0',
+		signatureID=msg,
 		name=title,
-		message=msg,
 		severity='5',
 		extension=ext+' dhost=' + NODENAME,
 	)
