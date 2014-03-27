@@ -42,7 +42,9 @@ import sys
 import ldap
 import syslog
 import fcntl
-from time import sleep
+import time
+import signal, errno
+from contextlib import contextmanager
 
 LDAP_URL='ldap://<%= ldap_server %>'
 LDAP_BIND_DN='uid=<%= bind_user %>,ou=logins,dc=mozilla'
@@ -87,16 +89,30 @@ def cef(title, msg, ext):
 	syslog.syslog(syslog.LOG_INFO, cefmsg)
 	syslog.closelog()
 
+@contextmanager
+def lock_timeout(seconds):
+	def timeout_handler(signum, frame):
+		pass
+	original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+	try:
+		signal.alarm(seconds)
+		yield
+	finally:
+		signal.alarm(0)
+		signal.signal(signal.SIGALRM, original_handler)
+
 def wait_for_lock():
-	lockfd = open(LOCKPATH, 'a+')
-	while True:
-		try:
-			fcntl.flock(lockfd, fcntl.LOCK_EX)
-		except (IOError, OSError) as e:
-			log("Failed to acquire execution lock: '%s'. Waiting %s seconds." % (e, LOCKWAITTIME))
-			time.sleep(LOCKWAITTIME)
-		else:
-			break
+	acquired = False
+	while not acquired:
+		with lock_timeout(LOCKWAITTIME):
+			lockfd = open(LOCKPATH, 'a+')
+			try:
+				fcntl.flock(lockfd, fcntl.LOCK_EX)
+			except (IOError, OSError) as e:
+				log("Failed to acquire execution lock on '%s'. Error='%s'. Waiting %s seconds before retrying." %
+					(LOCKPATH, e.errno, LOCKWAITTIME))
+			else:
+				acquired = True
 	return lockfd
 
 def free_lock(lockfd):
