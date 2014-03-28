@@ -40,10 +40,10 @@
 import os
 import sys
 import ldap
-import syslog
 import fcntl
 import time
 import signal, errno
+import mozdef
 from contextlib import contextmanager
 
 LDAP_URL='ldap://<%= ldap_server %>'
@@ -52,7 +52,6 @@ LDAP_BIND_PASSWD='<%= bind_password %>'
 LDAP_BASE_DN='ou=groups,dc=mozilla'
 LDAP_FILTER='cn=vpn_*'
 
-CEF_FACILITY=syslog.LOG_LOCAL4
 NODENAME=os.uname()[1]
 IPTABLES='/sbin/iptables'
 IPSET='/usr/sbin/ipset'
@@ -62,31 +61,8 @@ PER_USER_RULES_PREFIX='users/vpn_'
 LOCKPATH='/var/run/openvpn_netfilter.lock'
 LOCKWAITTIME=2
 
-def log(msg):
-	"""
-		Send a message to syslog
-	"""
-	syslog.openlog('OpenVPN', 0, syslog.LOG_DAEMON)
-	syslog.syslog(syslog.LOG_INFO, msg)
-	syslog.closelog()
-
-def cef(title, msg, ext):
-	"""
-		Build a log message in CEF format and send it to syslog
-	"""
-	syslog.openlog('OpenVPN', 0, CEF_FACILITY)
-	cefmsg = 'CEF:{v}|{deviceVendor}|{deviceProduct}|{deviceVersion}|{signatureID}|{name}|{severity}|{extension}'.format(
-		v='0',
-		deviceVendor='Mozilla',
-		deviceProduct='OpenVPN',
-		deviceVersion='1.0',
-		signatureID='0',
-		name=title,
-		severity='5',
-		extension=ext+' msg= '+msg+' dhost=' + NODENAME,
-	)
-	syslog.syslog(syslog.LOG_INFO, cefmsg)
-	syslog.closelog()
+#MozDef Logging
+mdmsg = mozdef.MozDefMsg(MOZDEF_HOST, tags=['openvpn', 'netfilter'])
 
 @contextmanager
 def lock_timeout(seconds):
@@ -108,8 +84,8 @@ def wait_for_lock():
 			try:
 				fcntl.flock(lockfd, fcntl.LOCK_EX)
 			except (IOError, OSError) as e:
-				log("Failed to acquire execution lock on '%s'. Error='%s'. Waiting %s seconds before retrying." %
-					(LOCKPATH, e.errno, LOCKWAITTIME))
+				mdmsg.send(summary='Failed to aquire lock.',
+					details={"lock_path": LOCKPATH, "error": e.errno, "lock_retry_seconds": LOCKWAITTIME})
 			else:
 				acquired = True
 	return lockfd
@@ -240,8 +216,7 @@ def load_ldap():
 			try:
 				ulist.append(u.split('=')[1].split(',')[0])
 			except:
-				log("Failed to load user from LDAP: %s at group %s, skipping" %
-					(u, group))
+				mdmsg.send(summary='Failed to load user from LDAP', details={'user': u, 'group': group))
 		if grp[1].has_key('ipHostNumber'):
 			hlist = grp[1]['ipHostNumber']
 		schema[group] = {'cn': ulist, 'networks': hlist}
@@ -290,8 +265,7 @@ def load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets):
 			fd = open(rule_file)
 		except:
 			# Skip if file is not found
-			log("Failed to open rule file '%s' for user '%s', skipping group" %
-				(rule_file, usercn))
+			mdmsg.send(summary="Failed to open rule file, skipping group", details={'rule_file': rule_file, 'user': usercn})
 			return
 
 		comment = usercn + ':' + group + ' file_acl'
@@ -357,8 +331,8 @@ def add_chain(usersrcip, usercn, dev):
 	status = os.system(command)
 	usergroups = ""
 	if chain_exists(usersrcip):
-		cef('Chain exists|Attempted to replace an existing chain. Failing.',
-			'dst=' + usersrcip + ' suser=' + usercn)
+		mdmsg.send(summary='Attempted to replace an existing chain, failing.',
+			details={'srcip': usersrcip, 'user': usercn})
 		sys.exit(1)
 	iptables('-N ' + usersrcip)
 	ipset('--create ' + usersrcip + ' nethash')
@@ -436,24 +410,22 @@ def main():
 	lockfd = wait_for_lock()
 
 	if operation == 'add':
-		cef('User Login Successful', 'OpenVPN endpoint connected',
-			'src=' + client_ip + ' spt='+client_port + ' dst=' + usersrcip +
-			' suser=' + usercn)
+		mdmsg.send(summary='Logging success: OpenVPN endpoint connected',
+			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
 		add_chain(usersrcip, usercn, device)
 	elif operation == 'update':
-		cef('User Login Successful', 'OpenVPN endpoint re-connected',
-			'src=' + client_ip + ' spt=' + client_port + ' dst=' + usersrcip +
-			' suser=' + usercn)
+		mdmsg.send(summary='Logging success: OpenVPN endpoint re-connected',
+			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
 		update_chain(usersrcip, usercn, device)
 	elif operation == 'delete':
-		cef('User Login Successful', 'OpenVPN endpoint disconnected',
-			'dst=' + usersrcip)
+		mdmsg.send(summary='Logout success: OpenVPN endpoint disconnected',
+			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
 		del_chain(usersrcip, device)
 	else:
-		log('Unknown operation')
+		mdmsg.send(summary='Logging success: OpenVPN unknown operation',
+			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
 
 	free_lock(lockfd)
-
 	sys.exit(0)
 
 if __name__ == "__main__":
