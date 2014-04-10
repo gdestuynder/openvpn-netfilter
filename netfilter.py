@@ -333,7 +333,7 @@ def add_chain(usersrcip, usercn, dev):
 	if chain_exists(usersrcip):
 		mdmsg.send(summary='Attempted to replace an existing chain, failing.',
 			details={'srcip': usersrcip, 'user': usercn})
-		sys.exit(1)
+		return False
 	iptables('-N ' + usersrcip)
 	ipset('--create ' + usersrcip + ' nethash')
 	usergroups = load_rules(usersrcip, usercn, dev)
@@ -352,6 +352,7 @@ def add_chain(usersrcip, usercn, dev):
 			 ' "' + ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j DROP' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
+	return True
 
 def del_chain(usersrcip, dev):
 	"""
@@ -372,7 +373,7 @@ def update_chain(usersrcip, usercn, dev):
 		Wrapper function around add and delete
 	"""
 	del_chain(usersrcip, dev)
-	add_chain(usersrcip, usercn, dev)
+	return add_chain(usersrcip, usercn, dev)
 
 def main():
 	"""
@@ -397,7 +398,7 @@ def main():
 	if len(sys.argv) < 3:
 		print("Forgot something, like, arguments?")
 		print("USAGE: %s <operation> <user src ip> [cn]" % sys.argv[0])
-		sys.exit(1)
+		return False
 
 	operation = sys.argv[1]
 	usersrcip = sys.argv[2]
@@ -406,17 +407,14 @@ def main():
 	else:
 		usercn = None
 
-	# we only authorize one script execution at a time
-	lockfd = wait_for_lock()
-
 	if operation == 'add':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint connected',
 			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-		add_chain(usersrcip, usercn, device)
+		return add_chain(usersrcip, usercn, device)
 	elif operation == 'update':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint re-connected',
 			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-		update_chain(usersrcip, usercn, device)
+		return update_chain(usersrcip, usercn, device)
 	elif operation == 'delete':
 		mdmsg.send(summary='Logout success: OpenVPN endpoint disconnected',
 			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
@@ -424,9 +422,27 @@ def main():
 	else:
 		mdmsg.send(summary='Logging success: OpenVPN unknown operation',
 			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-
-	free_lock(lockfd)
-	sys.exit(0)
+	return True
 
 if __name__ == "__main__":
-	main()
+	control = os.environ.get('control')
+#	we only authorize one script execution at a time
+	lockfd = wait_for_lock()
+#   success
+	if main():
+		try:
+			with open(control) as f:
+				f.write('1')
+		except:
+			pass
+		free_lock(lockfd)
+		sys.exit(0)
+
+#	failure
+	try:
+		with open(control) as f:
+			f.write('0')
+	except:
+		pass
+	free_lock(lockfd)
+	sys.exit(1)
