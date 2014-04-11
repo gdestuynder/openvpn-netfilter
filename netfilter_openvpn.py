@@ -71,16 +71,20 @@ def lock_timeout(seconds):
 
 def wait_for_lock():
 	acquired = False
+	retries = 0
 	while not acquired:
 		with lock_timeout(LOCKWAITTIME):
-			lockfd = open(LOCKPATH, 'a+')
+			if retries >= LOCKRETRIESMAX:
+				return None
 			try:
+				lockfd = open(LOCKPATH, 'a+')
 				fcntl.flock(lockfd, fcntl.LOCK_EX)
 			except (IOError, OSError) as e:
 				mdmsg.send(summary='Failed to aquire lock.',
 					details={"lock_path": LOCKPATH, "error": e.errno, "lock_retry_seconds": LOCKWAITTIME})
 			else:
 				acquired = True
+			retries += 1
 	return lockfd
 
 def free_lock(lockfd):
@@ -369,73 +373,50 @@ def update_chain(usersrcip, usercn, dev):
 	return add_chain(usersrcip, usercn, dev)
 
 def main():
-	"""
-		Main function, called with 3 arguments
-		- 'operation' is either 'add', 'delete' or 'update'
-		- 'user src ip' is the source IP address of the VPN user, as allocated
-		  by openvpn.
-		- 'cn' is the openvpn login that will be queried in LDAP
-		these arguments are provided via the 'learn-address' openvpn hook
-	"""
-	try:
-		device = os.environ['dev']
-	except:
-		device = 'lo'
-	try:
-		client_ip = os.environ['untrusted_ip']
-		client_port = os.environ['untrusted_port']
-	except:
-		client_ip = '127.0.0.1'
-		client_port = '0'
-
-	if len(sys.argv) < 3:
-		print("Forgot something, like, arguments?")
-		print("USAGE: %s <operation> <user src ip> [cn]" % sys.argv[0])
-		return False
-
-	operation = sys.argv[1]
-	usersrcip = sys.argv[2]
-	if len(sys.argv) == 4:
-		usercn = sys.argv[3]
-	else:
-		usercn = None
+	device = os.environ.get('dev', 'lo')
+	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
+	client_port = os.environ.get('untrusted_port', '0')
+	usercn = os.environ.get('common_name', None)
 
 	if operation == 'add':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint connected',
-			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-		return add_chain(usersrcip, usercn, device)
+			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+		return add_chain(client_ip, usercn, device)
 	elif operation == 'update':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint re-connected',
-			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-		return update_chain(usersrcip, usercn, device)
+			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+		return update_chain(client_ip, usercn, device)
 	elif operation == 'delete':
 		mdmsg.send(summary='Logout success: OpenVPN endpoint disconnected',
-			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
-		del_chain(usersrcip, device)
+			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+		del_chain(client_ip, device)
 	else:
 		mdmsg.send(summary='Logging success: OpenVPN unknown operation',
-			details={'srcip': client_ip, 'srcport': client_port, 'dstip': usersrcip 'user': usercn})
+			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
 	return True
 
-if __name__ == "__main__":
+def exit(status):
+	""" Note that status is 0 for success (program return code), while ctrl_txt is 1 for success (openvpn control file return code) """
 	control = os.environ.get('control')
-#	we only authorize one script execution at a time
-	lockfd = wait_for_lock()
-#   success
-	if main():
-		try:
-			with open(control) as f:
-				f.write('1')
-		except:
-			pass
-		free_lock(lockfd)
-		sys.exit(0)
+	ctrl_txt = '0' # failure by default
 
-#	failure
+	if status == 0:
+		ctrl_txt = '1'
+
 	try:
 		with open(control) as f:
-			f.write('0')
-	except:
-		pass
+			f.write(ctrl_txt)
+	sys.exit(status)
+
+if __name__ == "__main__":
+#	we only authorize one script execution at a time
+	lockfd = wait_for_lock()
+	if (lockfd == None):
+		exit(1)
+
+	if main():
+		free_lock(lockfd)
+		exit(0)
+
 	free_lock(lockfd)
-	sys.exit(1)
+	exit(1)

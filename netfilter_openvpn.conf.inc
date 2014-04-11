@@ -18,3 +18,4 @@ PER_USER_RULES_PREFIX='users/vpn_'
 # Script lock
 LOCKPATH='/var/run/openvpn_netfilter.lock'
 LOCKWAITTIME=2
+LOCKRETRIESMAX=10
