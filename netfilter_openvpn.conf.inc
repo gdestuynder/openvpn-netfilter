@@ -8,7 +8,6 @@ LDAP_FILTER='cn=vpn_*'
 # Common stuff
 IPTABLES='/sbin/iptables'
 IPSET='/usr/sbin/ipset'
-NODENAME=os.uname()[1]
 
 # Rules location
 RULESCLEANUP='<%= confdir %>/plugins/netfilter/vpn-netfilter-cleanup-ip.sh'

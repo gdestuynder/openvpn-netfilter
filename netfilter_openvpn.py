@@ -73,15 +73,15 @@ def wait_for_lock():
 	acquired = False
 	retries = 0
 	while not acquired:
-		with lock_timeout(LOCKWAITTIME):
-			if retries >= LOCKRETRIESMAX:
+		with lock_timeout(config.LOCKWAITTIME):
+			if retries >= config.LOCKRETRIESMAX:
 				return None
 			try:
-				lockfd = open(LOCKPATH, 'a+')
+				lockfd = open(config.LOCKPATH, 'a+')
 				fcntl.flock(lockfd, fcntl.LOCK_EX)
 			except (IOError, OSError) as e:
 				mdmsg.send(summary='Failed to aquire lock.',
-					details={"lock_path": LOCKPATH, "error": e.errno, "lock_retry_seconds": LOCKWAITTIME})
+					details={"lock_path": config.LOCKPATH, "error": e.errno, "lock_retry_seconds": config.LOCKWAITTIME})
 			else:
 				acquired = True
 			retries += 1
@@ -103,7 +103,7 @@ def iptables(args, raiseEx=True):
 		Return: True on success, Exception on error if raiseEX=True
 				False on error if raiseEx=False
 	"""
-	command = "%s %s" % (IPTABLES, args)
+	command = "%s %s" % (config.IPTABLES, args)
 	status = os.system(command)
 	if status == -1:
 		raise IptablesFailure("failed to invoke iptables (%s)" % (command,))
@@ -125,7 +125,7 @@ def ipset(args, raiseEx=True):
 		Return: True on success, Exception on error if raiseEX=True
 				False on error if raiseEx=False
 	"""
-	command = "%s %s" % (IPSET, args)
+	command = "%s %s" % (config.IPSET, args)
 	status = os.system(command)
 	if status == -1:
 		raise IpsetFailure("failed to invoke ipset (%s)" % (command,))
@@ -200,9 +200,9 @@ def load_ldap():
 						'vpn_group2': ...
 					 }
 	"""
-	conn = ldap.initialize(LDAP_URL)
-	conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PASSWD)
-	res = conn.search_s(LDAP_BASE_DN, ldap.SCOPE_SUBTREE, LDAP_FILTER,
+	conn = ldap.initialize(config.LDAP_URL)
+	conn.simple_bind_s(config.LDAP_BIND_DN, config.LDAP_BIND_PASSWD)
+	res = conn.search_s(config.LDAP_BASE_DN, ldap.SCOPE_SUBTREE, config.LDAP_FILTER,
 						['cn', 'member', 'ipHostNumber'])
 	schema = {}
 	for grp in res:
@@ -257,7 +257,7 @@ def load_group_rule(usersrcip, usercn, dev, group, networks, uniq_nets):
 				build_firewall_rule(usersrcip ,usersrcip, destip, '', '',
 									comment)
 	else:
-		rule_file = RULES + "/" + group + '.rules'
+		rule_file = config.RULES + "/" + group + '.rules'
 		try:
 			fd = open(rule_file)
 		except:
@@ -281,7 +281,7 @@ def load_per_user_rules(usersrcip, usercn, dev):
 		This feature is rarely used, and thus the function will simply exit
 		in silence if no file is found.
 	"""
-	rule_file = RULES + "/" + PER_USER_RULES_PREFIX + usercn
+	rule_file = config.RULES + "/" + config.PER_USER_RULES_PREFIX + usercn
 	try:
 		fd = open(rule_file)
 	except:
@@ -324,7 +324,7 @@ def add_chain(usersrcip, usercn, dev):
 		Jump traffic to the custom chain from the INPUT,OUTPUT & FORWARD chains
 	"""
 	# safe cleanup, just in case
-	command = "%s %s" % (RULESCLEANUP, usersrcip)
+	command = "%s %s" % (config.RULESCLEANUP, usersrcip)
 	status = os.system(command)
 	usergroups = ""
 	if chain_exists(usersrcip):
@@ -362,7 +362,7 @@ def del_chain(usersrcip, dev):
 	iptables('-X ' + usersrcip, False)
 	ipset("--destroy " + usersrcip, False)
 	# safe cleanup, just in case
-	command = "%s %s" % (RULESCLEANUP, usersrcip)
+	command = "%s %s" % (config.RULESCLEANUP, usersrcip)
 	status = os.system(command)
 
 def update_chain(usersrcip, usercn, dev):
