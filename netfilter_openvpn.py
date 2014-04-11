@@ -377,6 +377,10 @@ def main():
 	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
 	client_port = os.environ.get('untrusted_port', '0')
 	usercn = os.environ.get('common_name', None)
+	if len(sys.argv) < 2:
+		printf("USAGE: %s <operation>" % sys.argv[0])
+		return False
+	operation = sys.argv[1]
 
 	if operation == 'add':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint connected',
