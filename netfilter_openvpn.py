@@ -50,6 +50,8 @@ import imp
 try:
 	config = imp.load_source('config', 'netfilter_openvpn.conf')
 except:
+	config = imp.load_source('config', '/etc/openvpn/netfilter_openvpn.conf')
+else:
 	config = imp.load_source('config', '/etc/netfilter_openvpn.conf')
 
 #MozDef Logging
