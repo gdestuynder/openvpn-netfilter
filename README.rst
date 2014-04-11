@@ -33,7 +33,7 @@ Change the settings in /etc/openvpn/netfilter_openvpn.conf.
 In general, you'll want to store the rules in /etc/openvpn/netfilter/rules/* and have a list of files such as "vpn_teamA.rules".
 Users belonging to the LDAP group name teamA will get those rules.
 You'll also want to have /etc/openvpn/netfilter/users/* for per user rules.
-Likewise, make sure that _the paths_ of the 'iptables', 'ipset', and 'vpn-netfilter-cleanup-ip.sh' commands are correct for your system.
+Likewise, make sure that the paths of the 'iptables', 'ipset', and 'vpn-netfilter-cleanup-ip.sh' commands are correct for your system.
 
 Don't forget to push the proper routing rules for the network/IPs you allow.
 
