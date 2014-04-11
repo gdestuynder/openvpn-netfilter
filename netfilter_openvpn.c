@@ -30,10 +30,14 @@ struct context {
 };
 
 static int
-generic_deferred_handler(char *script_path, const char * envp[])
+generic_deferred_handler(char *script_path, const char * argv[], const char * envp[])
 {
 	int pid;
-	char *argv[] = {script_path, 0};
+	char *sc_argv[] = {script_path, 0};
+
+	if (argv[0] || argv[1]) {
+		return OPENVPN_PLUGIN_FUNC_ERROR;
+	}
 	
 	signal(SIGCHLD, SIG_IGN);
 	pid = fork();
@@ -45,8 +49,8 @@ generic_deferred_handler(char *script_path, const char * envp[])
 	if (pid > 0) {
 		return OPENVPN_PLUGIN_FUNC_DEFERRED;
 	}
-	
-	execve(argv[0], &argv[0], (char *const*)envp);
+
+	execve(sc_argv[0], (char *const*)&argv[1], (char *const*)envp);
 	exit(127);
 }
 
@@ -58,7 +62,7 @@ openvpn_plugin_func_v2(openvpn_plugin_handle_t handle, const int type, const cha
 	struct context *ctx = (struct context *) handle;
 
 	if (type == OPENVPN_PLUGIN_LEARN_ADDRESS) {
-		return generic_deferred_handler(ctx->script_path, envp);
+		return generic_deferred_handler(ctx->script_path, argv, envp);
 	} else {
 		return OPENVPN_PLUGIN_FUNC_ERROR;
 	}
