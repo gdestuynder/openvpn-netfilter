@@ -218,7 +218,7 @@ def load_ldap():
 			try:
 				ulist.append(u.split('=')[1].split(',')[0])
 			except:
-				mdmsg.send(summary='Failed to load user from LDAP', details={'user': u, 'group': group))
+				mdmsg.send(summary='Failed to load user from LDAP', details={'user': u, 'group': group})
 		if grp[1].has_key('ipHostNumber'):
 			hlist = grp[1]['ipHostNumber']
 		schema[group] = {'cn': ulist, 'networks': hlist}
@@ -415,6 +415,8 @@ def exit(status):
 	try:
 		with open(control) as f:
 			f.write(ctrl_txt)
+	except:
+		pass
 	sys.exit(status)
 
 if __name__ == "__main__":
