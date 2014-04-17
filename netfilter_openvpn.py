@@ -47,12 +47,17 @@ import mozdef
 from contextlib import contextmanager
 import imp
 
-try:
-	config = imp.load_source('config', 'netfilter_openvpn.conf')
-except:
-	config = imp.load_source('config', '/etc/openvpn/netfilter_openvpn.conf')
-else:
-	config = imp.load_source('config', '/etc/netfilter_openvpn.conf')
+cfg_path = ['netfilter_openvpn.conf', '/etc/openvpn/netfilter_openvpn.conf', '/etc/netfilter_openvpn.conf']
+
+for cfg in cfg_path:
+	try:
+		config = imp.load_source('config', cfg)
+	except:
+		pass
+
+if config == None:
+	print("Failed to load config")
+	sys.exit(1)
 
 #MozDef Logging
 mdmsg = mozdef.MozDefMsg(MOZDEF_HOST, tags=['openvpn', 'netfilter'])
