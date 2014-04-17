@@ -48,6 +48,7 @@ from contextlib import contextmanager
 import imp
 
 cfg_path = ['netfilter_openvpn.conf', '/etc/openvpn/netfilter_openvpn.conf', '/etc/netfilter_openvpn.conf']
+config = None
 
 for cfg in cfg_path:
 	try:
