@@ -406,15 +406,21 @@ def main():
 	return True
 
 def exit(status):
-	""" Note that status is 0 for success (program return code), while ctrl_txt is 1 for success (openvpn control file return code) """
-	control = os.environ.get('control')
+	""" Note that status is 0 for success (program return code), while ctrl_txt is 1 for success (openvpn control file
+		return code) """
+
+	control = os.environ.get('auth_control_file')
+	if control == None:
+		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and
+		fail.', details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+
 	ctrl_txt = '0' # failure by default
 
 	if status == 0:
 		ctrl_txt = '1'
 
 	try:
-		with open(control) as f:
+		with open(control, 'w') as f:
 			f.write(ctrl_txt)
 	except:
 		pass
