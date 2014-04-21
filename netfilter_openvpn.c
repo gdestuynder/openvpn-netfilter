@@ -39,7 +39,6 @@ generic_deferred_handler(char *script_path, const char * argv[], const char * en
 		return OPENVPN_PLUGIN_FUNC_ERROR;
 	}
 	
-	signal(SIGCHLD, SIG_IGN);
 	pid = fork();
 
 	if (pid < 0) {
