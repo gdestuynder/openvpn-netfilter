@@ -29,11 +29,25 @@ struct context {
 	char *script_path;
 };
 
+void handle_sigchld(int sig)
+{
+	while(waitpid((pid_t)(-1), 0, WNOHANG) > 0) {}
+}
+
 static int
 generic_deferred_handler(char *script_path, const char * argv[], const char * envp[])
 {
 	int pid;
+	struct sigaction sa;
 	char *sc_argv[] = {script_path, 0};
+
+	sa.sa_handler = &handle_sigchld;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+
+	if (sigaction(SIGCHLD, &sa, 0) == -1) {
+		return OPENVPN_PLUGIN_FUNC_ERROR;
+	}
 
 	if (argv[0] || argv[1]) {
 		return OPENVPN_PLUGIN_FUNC_ERROR;
