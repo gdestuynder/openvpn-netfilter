@@ -16,7 +16,7 @@ install: plugin
 	mkdir -p $(DESTDIR)/etc/openvpn/
 	$(INSTALL) -m755 netfilter_openvpn.so $(DESTDIR)$(PREFIX)/lib/openvpn/plugins/
 	$(INSTALL) -m755 netfilter_openvpn.py $(DESTDIR)$(PREFIX)/lib/openvpn/plugins/
-	$(INSTALL) -m600 netfilter_openvpn.conf.inc $(DESTDIR)/etc/openvpn/netfilter_openvpn.conf
+	$(INSTALL) -m600 netfilter_openvpn.conf.inc $(DESTDIR)/etc/netfilter_openvpn.conf
 	$(INSTALL) -m755 scripts/vpn-fw-find-user.sh $(DESTDIR)$(PREFIX)/bin/
 	$(INSTALL) -m755 scripts/vpn-netfilter-cleanup-ip.sh $(DESTDIR)$(PREFIX)/bin/
 
