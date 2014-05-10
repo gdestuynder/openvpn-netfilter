@@ -3,7 +3,7 @@ CFLAGS	:=
 LDFLAGS	:= -fPIC -shared
 INSTALL	:= install
 DESTDIR	:= /
-PREFIX	:= /usr/
+PREFIX	:= /usr
 
 all: plugin
 
@@ -14,6 +14,7 @@ plugin: netfilter_openvpn.c
 install: plugin
 	mkdir -p $(DESTDIR)$(PREFIX)/lib/openvpn/plugins
 	mkdir -p $(DESTDIR)/etc/openvpn
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	$(INSTALL) -m755 netfilter_openvpn.so $(DESTDIR)$(PREFIX)/lib/openvpn/plugins
 	$(INSTALL) -m755 netfilter_openvpn.py $(DESTDIR)$(PREFIX)/lib/openvpn/plugins
 	$(INSTALL) -m600 netfilter_openvpn.conf.inc $(DESTDIR)/etc/netfilter_openvpn.conf
