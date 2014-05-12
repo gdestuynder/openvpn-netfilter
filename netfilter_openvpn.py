@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim: set noexpandtab:ts=4
 # Requires:
 # python-ldap
 #
@@ -414,8 +415,8 @@ def exit(status):
 
 	control = os.environ.get('auth_control_file')
 	if control == None:
-		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and
-		fail.', details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and \
+			fail.', details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
 
 	ctrl_txt = '0' # failure by default
 
