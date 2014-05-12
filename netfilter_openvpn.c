@@ -49,7 +49,7 @@ generic_deferred_handler(char *script_path, const char * argv[], const char * en
 		return OPENVPN_PLUGIN_FUNC_ERROR;
 	}
 
-	if (argv[0] || argv[1]) {
+	if (!argv[0] || !argv[1]) {
 		return OPENVPN_PLUGIN_FUNC_ERROR;
 	}
 	
