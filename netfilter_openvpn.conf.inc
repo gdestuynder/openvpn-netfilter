@@ -18,3 +18,7 @@ PER_USER_RULES_PREFIX='users/vpn_'
 LOCKPATH='/var/run/openvpn_netfilter.lock'
 LOCKWAITTIME=2
 LOCKRETRIESMAX=10
+
+# Logging
+USE_MOZDEF = True
+MOZDEF_HOST = None

@@ -62,7 +62,10 @@ if config == None:
 	sys.exit(1)
 
 #MozDef Logging
-mdmsg = mozdef.MozDefMsg(MOZDEF_HOST, tags=['openvpn', 'netfilter'])
+if config.USE_MOZDEF:
+	mdmsg = mozdef.MozDefMsg(config.MOZDEF_HOST, tags=['openvpn', 'netfilter'])
+else:
+	mdmsg = mozdef.MozDefMsgSyslogEmulation()
 
 @contextmanager
 def lock_timeout(seconds):
@@ -388,7 +391,7 @@ def main():
 		usercn = os.environ.get('username', None)
 
 	if len(sys.argv) < 2:
-		printf("USAGE: %s <operation>" % sys.argv[0])
+		print("USAGE: %s <operation>" % sys.argv[0])
 		return False
 	operation = sys.argv[1]
 
@@ -414,6 +417,10 @@ def exit(status):
 		return code) """
 
 	control = os.environ.get('auth_control_file')
+	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
+	client_port = os.environ.get('untrusted_port', '0')
+	usercn = os.environ.get('common_name', '')
+
 	if control == None:
 		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and \
 			fail.', details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
