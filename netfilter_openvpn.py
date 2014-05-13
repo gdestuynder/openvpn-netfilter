@@ -327,6 +327,15 @@ def chain_exists(name):
 	"""
 	return iptables('-L ' + name, False)
 
+def kill_block_hack(usersrcip):
+	"""
+		Removes the general block on the vpn IP.
+		This is done because we just block the IP and start the script so that openvpn doesnt block.
+		But we don't know if the operation will succeed yet, so it doesnt allow traffic just to be safe.
+		This function allows traffic through.
+	"""
+	iptables('-D INPUT -s %s -j DROP', usersrcip)
+
 def add_chain(usersrcip, usercn, dev):
 	"""
 		Create a custom chain for the VPN user, named using his source IP
@@ -339,7 +348,7 @@ def add_chain(usersrcip, usercn, dev):
 	usergroups = ""
 	if chain_exists(usersrcip):
 		mdmsg.send(summary='Attempted to replace an existing chain, failing.',
-			details={'srcip': usersrcip, 'user': usercn})
+			details={'vpnip': usersrcip, 'user': usercn})
 		return False
 	iptables('-N ' + usersrcip)
 	ipset('--create ' + usersrcip + ' nethash')
@@ -359,6 +368,7 @@ def add_chain(usersrcip, usercn, dev):
 			 ' "' + ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j DROP' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
+	kill_block_hack(usersrcip)
 	return True
 
 def del_chain(usersrcip, dev):
@@ -385,6 +395,7 @@ def update_chain(usersrcip, usercn, dev):
 def main():
 	device = os.environ.get('dev', 'lo')
 	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
+	vpn_ip = os.environ.get('address', '127.0.0.1')
 	client_port = os.environ.get('untrusted_port', '0')
 	usercn = os.environ.get('common_name', None)
 	if usercn == None:
@@ -397,16 +408,16 @@ def main():
 
 	if operation == 'add':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint connected',
-			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
-		return add_chain(client_ip, usercn, device)
+			details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
+		return add_chain(vpn_ip, usercn, device)
 	elif operation == 'update':
 		mdmsg.send(summary='Logging success: OpenVPN endpoint re-connected',
-			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
-		return update_chain(client_ip, usercn, device)
+			details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
+		return update_chain(vpn_ip, usercn, device)
 	elif operation == 'delete':
 		mdmsg.send(summary='Logout success: OpenVPN endpoint disconnected',
-			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
-		del_chain(client_ip, device)
+			details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
+		del_chain(vpn_ip, device)
 	else:
 		mdmsg.send(summary='Logging success: OpenVPN unknown operation',
 			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
@@ -418,12 +429,13 @@ def exit(status):
 
 	control = os.environ.get('auth_control_file')
 	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
+	vpn_ip = os.environ.get('address', '127.0.0.1')
 	client_port = os.environ.get('untrusted_port', '0')
 	usercn = os.environ.get('common_name', '')
 
 	if control == None:
 		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and \
-			fail.', details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
+			fail.', details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
 
 	ctrl_txt = '0' # failure by default
 

@@ -7,11 +7,12 @@ Setup
 =====
 
 While the script is fast, it still hangs OpenVPN for a second while running, which may be felt by VPN users.
-To avoid that, use the bundled plugin which implements a deferred call (in OpenVPN server configuration):
+To minimize the impact the script blocks all connections then fork off and return control to openvpn.
+The fork finishes the rule setup.
 
 .. code::
 
-   plugin /usr/lib/openvpn/plugins/netfilter_openvpn.so /usr/lib/openvpn/plugins/netfilter_openvpn.py
+   learn-address /usr/lib/openvpn/plugins/netfilter_openvpn.sh
 
 If using LDAP for user authentication, add this to the OpenVPN server configuration:
 
