@@ -62,10 +62,11 @@ if config == None:
 	sys.exit(1)
 
 #MozDef Logging
-if config.USE_MOZDEF:
-	mdmsg = mozdef.MozDefMsg(config.MOZDEF_HOST, tags=['openvpn', 'netfilter'])
-else:
-	mdmsg = mozdef.MozDefMsgSyslogEmulation()
+mdmsg = mozdef.MozDefMsg(config.MOZDEF_HOST, tags=['openvpn', 'netfilter'])
+if config.USE_SYSLOG:
+	mdmsg.sendToSyslog = True
+if not config.USE_MOZDEF:
+	mdmsg.syslogOnly = True
 
 @contextmanager
 def lock_timeout(seconds):
