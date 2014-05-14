@@ -335,7 +335,7 @@ def kill_block_hack(usersrcip):
 		But we don't know if the operation will succeed yet, so it doesnt allow traffic just to be safe.
 		This function allows traffic through.
 	"""
-	iptables('-D INPUT -s %s -j DROP', usersrcip)
+	iptables('-D INPUT -s %s -j DROP', % usersrcip)
 
 def add_chain(usersrcip, usercn, dev):
 	"""
