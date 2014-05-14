@@ -435,8 +435,8 @@ def exit(status):
 	usercn = os.environ.get('common_name', '')
 
 	if control == None:
-		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and \
-			fail.', details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
+		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and ' \
+			'fail.', details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
 
 	ctrl_txt = '0' # failure by default
 
