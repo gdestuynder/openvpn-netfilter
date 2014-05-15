@@ -1,0 +1,2 @@
+- reinstate the rule cleanup script through pure python, do not remove the kill_block_hack rule when doing so
+- reinstate deferred plugin support when openvpn has support for deferred learn-address plugins
