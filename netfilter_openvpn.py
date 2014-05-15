@@ -424,41 +424,15 @@ def main():
 			details={'srcip': client_ip, 'srcport': client_port, 'user': usercn})
 	return True
 
-def exit(status):
-	""" Note that status is 0 for success (program return code), while ctrl_txt is 1 for success (openvpn control file
-		return code) """
-
-	control = os.environ.get('auth_control_file')
-	client_ip = os.environ.get('untrusted_ip', '127.0.0.1')
-	vpn_ip = os.environ.get('address', '127.0.0.1')
-	client_port = os.environ.get('untrusted_port', '0')
-	usercn = os.environ.get('common_name', '')
-
-	if control == None:
-		mdmsg.send(summary='No control file found, if using deferred plugin call the authentication will stall and ' \
-			'fail.', details={'srcip': client_ip, 'vpnip': vpn_ip, 'srcport': client_port, 'user': usercn})
-
-	ctrl_txt = '0' # failure by default
-
-	if status == 0:
-		ctrl_txt = '1'
-
-	try:
-		with open(control, 'w') as f:
-			f.write(ctrl_txt)
-	except:
-		pass
-	sys.exit(status)
-
 if __name__ == "__main__":
 #	we only authorize one script execution at a time
 	lockfd = wait_for_lock()
 	if (lockfd == None):
-		exit(1)
+		sys.exit(1)
 
 	if main():
 		free_lock(lockfd)
-		exit(0)
+		sys.exit(0)
 
 	free_lock(lockfd)
-	exit(1)
+	sys.exit(1)
