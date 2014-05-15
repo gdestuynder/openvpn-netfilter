@@ -10,7 +10,6 @@ IPTABLES='/sbin/iptables'
 IPSET='/usr/sbin/ipset'
 
 # Rules location
-RULESCLEANUP='<%= confdir %>/plugins/netfilter/vpn-netfilter-cleanup-ip.sh'
 RULES='<%= confdir %>/plugins/netfilter/rules'
 PER_USER_RULES_PREFIX='users/vpn_'
 

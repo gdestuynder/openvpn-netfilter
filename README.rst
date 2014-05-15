@@ -103,3 +103,9 @@ Maintenance
 You can list the rules and sets of a particular user with the script named 'vpn-fw-find-user.sh'.
 
 You can delete all of the rules and sets of a given VPN IP using the script named 'vpn-netfilter-cleanup-ip.sh'.
+
+Upgrading
+=========
+
+On rule upgrades, start the script 'vpn-netfilter-cleanup-ip.sh' within 'netfilter_openvpn.sh' until all rules are
+upgraded. You may also do this all the time but this has a performance cost associated.

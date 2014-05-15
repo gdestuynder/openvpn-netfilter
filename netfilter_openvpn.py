@@ -328,14 +328,18 @@ def chain_exists(name):
 	"""
 	return iptables('-L ' + name, False)
 
-def kill_block_hack(usersrcip):
+def kill_block_hack(usersrcip, usercn):
 	"""
 		Removes the general block on the vpn IP.
 		This is done because we just block the IP and start the script so that openvpn doesnt block.
 		But we don't know if the operation will succeed yet, so it doesnt allow traffic just to be safe.
 		This function allows traffic through.
 	"""
-	iptables('-D INPUT -s %s -j DROP', % usersrcip)
+	try:
+		iptables('-D INPUT -s ' + usersrcip + ' -j DROP')
+	except:
+		mdmsg.send(summary='Failed to delete blocking rule, potential security issue', severity='CRITICAL',
+		details={'vpnip': usersrcip, 'user': usercn})
 
 def add_chain(usersrcip, usercn, dev):
 	"""
@@ -343,9 +347,6 @@ def add_chain(usersrcip, usercn, dev):
 		Load the LDAP rules into the custom chain
 		Jump traffic to the custom chain from the INPUT,OUTPUT & FORWARD chains
 	"""
-	# safe cleanup, just in case
-	command = "%s %s" % (config.RULESCLEANUP, usersrcip)
-	status = os.system(command)
 	usergroups = ""
 	if chain_exists(usersrcip):
 		mdmsg.send(summary='Attempted to replace an existing chain, failing.',
@@ -369,7 +370,7 @@ def add_chain(usersrcip, usercn, dev):
 			 ' "' + ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
 	iptables('-A ' + usersrcip + ' -j DROP' +
 			 ' -m comment --comment "' + usercn + ' at ' + usersrcip + '"')
-	kill_block_hack(usersrcip)
+	kill_block_hack(usersrcip, usercn)
 	return True
 
 def del_chain(usersrcip, dev):
@@ -382,9 +383,6 @@ def del_chain(usersrcip, dev):
 	iptables('-F ' + usersrcip, False)
 	iptables('-X ' + usersrcip, False)
 	ipset("--destroy " + usersrcip, False)
-	# safe cleanup, just in case
-	command = "%s %s" % (config.RULESCLEANUP, usersrcip)
-	status = os.system(command)
 
 def update_chain(usersrcip, usercn, dev):
 	"""
