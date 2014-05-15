@@ -6,6 +6,7 @@ address=$2
 # Use this if you need to use "username as common name". This has security implications:
 # username is arbitrary and sent by the user, common_name matches a signed certificate common bame and cannot be forged.
 #common_name=${username}
+export operation address common_name
 
 SUDO=/usr/bin/sudo
 IPTABLES=/sbin/iptables
